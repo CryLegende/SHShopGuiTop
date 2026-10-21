@@ -1,0 +1,4 @@
+placeholder:
+  format: "&e{index} &7• &e{item}&7, &e{sold} &7vendus (&e{revenue} SHC&7)"
+display:
+  useRealName: true
