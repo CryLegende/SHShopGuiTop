@@ -19,6 +19,8 @@ import org.bukkit.plugin.java.JavaPlugin;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.StandardCopyOption;
 import java.util.*;
 import java.util.Locale;
 
@@ -32,6 +34,9 @@ public class SHShopGuiTop extends JavaPlugin {
     private static SHShopGuiTop instance;
     private File salesFile;
     private YamlConfiguration salesConfig;
+    // Ventes enregistrées depuis la dernière écriture de sales.yml
+    private volatile boolean dirty;
+    private final Object fileLock = new Object();
 
     /**
      * Retourne le nom localisé de l'item en français en se basant sur la traduction intégrée de Minecraft.
@@ -92,18 +97,44 @@ public class SHShopGuiTop extends JavaPlugin {
         getCommand("recordsale").setExecutor(new RecordSaleCommand());
         getServer().getPluginManager().registerEvents(new ShopSaleListener(), this);
 
+        // Sauvegarde périodique hors du thread principal : un crash ne fait plus perdre toutes les ventes depuis le démarrage
+        getServer().getScheduler().runTaskTimerAsynchronously(this, () -> {
+            if (dirty) {
+                dirty = false;
+                saveSales();
+            }
+        }, 6000L, 6000L);
+
         getLogger().info("SHShopGuiTop activé !");
     }
 
     @Override
     public void onDisable() {
-        SalesManager.getInstance().saveToConfiguration(salesConfig);
-        try {
-            salesConfig.save(salesFile);
+        if (saveSales()) {
             getLogger().info("Les données de ventes ont été sauvegardées avec succès.");
-        } catch (IOException e) {
-            getLogger().severe("Erreur lors de la sauvegarde des données de ventes : " + e.getMessage());
         }
+    }
+
+    /** Écrit sales.yml (fichier temporaire puis remplacement : un arrêt en plein milieu ne le tronque pas). */
+    private boolean saveSales() {
+        synchronized (fileLock) {
+            YamlConfiguration yaml = new YamlConfiguration();
+            SalesManager.getInstance().saveToConfiguration(yaml);
+            File tmp = new File(salesFile.getParentFile(), salesFile.getName() + ".tmp");
+            try {
+                yaml.save(tmp);
+                Files.move(tmp.toPath(), salesFile.toPath(), StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+                return true;
+            } catch (IOException e) {
+                dirty = true;
+                getLogger().severe("Erreur lors de la sauvegarde des données de ventes : " + e.getMessage());
+                return false;
+            }
+        }
+    }
+
+    void markDirty() {
+        dirty = true;
     }
 
     public static SHShopGuiTop getInstance() {
@@ -132,6 +163,12 @@ public class SHShopGuiTop extends JavaPlugin {
         @Override
         public String getVersion() {
             return "1.0";
+        }
+
+        // Sans cela, /papi reload désenregistre les placeholders
+        @Override
+        public boolean persist() {
+            return true;
         }
 
         /**
@@ -177,7 +214,10 @@ public class SHShopGuiTop extends JavaPlugin {
     public static class SalesManager {
 
         private static SalesManager instance;
+        // Accès sous verrou : écrit par le thread principal, lu par PlaceholderAPI (parfois asynchrone) et la sauvegarde
         private final Map<String, SalesStatsEntry> salesData = new HashMap<>();
+        // Copie triée du top 10, recalculée seulement après une vente (les placeholders sont demandés très souvent)
+        private List<SalesStatsEntry> topCache;
 
         public static SalesManager getInstance() {
             if (instance == null) {
@@ -194,22 +234,31 @@ public class SHShopGuiTop extends JavaPlugin {
          * @param amount       nombre d’exemplaires vendus
          * @param revenue      revenu généré par la vente
          */
-        public void recordSale(String internalName, String minecraftId, int amount, double revenue) {
+        public synchronized void recordSale(String internalName, String minecraftId, int amount, double revenue) {
             SalesStatsEntry entry = salesData.get(internalName);
             if (entry == null) {
                 entry = new SalesStatsEntry(internalName, minecraftId, 0, 0.0);
                 salesData.put(internalName, entry);
             }
             entry.addSale(amount, revenue);
+            topCache = null;
+            SHShopGuiTop plugin = SHShopGuiTop.getInstance();
+            if (plugin != null) plugin.markDirty();
         }
 
         /**
          * Renvoie la liste triée des ventes (du plus vendu au moins vendu), limitée aux 10 premiers éléments.
          */
-        public List<SalesStatsEntry> getTopSales() {
-            List<SalesStatsEntry> list = new ArrayList<>(salesData.values());
-            list.sort((e1, e2) -> Integer.compare(e2.getSold(), e1.getSold()));
-            return list.size() > 10 ? list.subList(0, 10) : list;
+        public synchronized List<SalesStatsEntry> getTopSales() {
+            if (topCache == null) {
+                List<SalesStatsEntry> list = new ArrayList<>(salesData.size());
+                for (SalesStatsEntry e : salesData.values()) {
+                    list.add(new SalesStatsEntry(e.getInternalName(), e.getMinecraftId(), e.getSold(), e.getRevenue()));
+                }
+                list.sort((e1, e2) -> Integer.compare(e2.getSold(), e1.getSold()));
+                topCache = List.copyOf(list.size() > 10 ? list.subList(0, 10) : list);
+            }
+            return topCache;
         }
 
         /**
@@ -220,7 +269,8 @@ public class SHShopGuiTop extends JavaPlugin {
          * sold: <nombre>
          * revenue: <valeur>
          */
-        public void loadFromConfiguration(YamlConfiguration config) {
+        public synchronized void loadFromConfiguration(YamlConfiguration config) {
+            topCache = null;
             salesData.clear();
             for (String key : config.getKeys(false)) {
                 ConfigurationSection section = config.getConfigurationSection(key);
@@ -236,7 +286,7 @@ public class SHShopGuiTop extends JavaPlugin {
         /**
          * Sauvegarde les statistiques dans une configuration YAML.
          */
-        public void saveToConfiguration(YamlConfiguration config) {
+        public synchronized void saveToConfiguration(YamlConfiguration config) {
             config.getKeys(false).forEach(key -> config.set(key, null));
             for (Map.Entry<String, SalesStatsEntry> entry : salesData.entrySet()) {
                 ConfigurationSection section = config.createSection(entry.getKey());
@@ -367,10 +417,10 @@ public class SHShopGuiTop extends JavaPlugin {
          * Si l'événement n'est pas annulé et que l'action est SELL ou SELL_ALL,
          * on enregistre la vente.
          */
-        @org.bukkit.event.EventHandler
+        // MONITOR + ignoreCancelled : seules les ventes que les autres plugins n'ont pas annulées sont comptées
+        @org.bukkit.event.EventHandler(priority = org.bukkit.event.EventPriority.MONITOR, ignoreCancelled = true)
         public void onShopPreTransaction(ShopPreTransactionEvent event) {
-            if (!event.isCancelled() &&
-                (event.getShopAction() == ShopManager.ShopAction.SELL || event.getShopAction() == ShopManager.ShopAction.SELL_ALL)) {
+            if (event.getShopAction() == ShopManager.ShopAction.SELL || event.getShopAction() == ShopManager.ShopAction.SELL_ALL) {
                 ShopItem shopItem = event.getShopItem();
                 if (shopItem == null) return;
 

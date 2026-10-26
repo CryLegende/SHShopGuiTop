@@ -9,3 +9,9 @@ commands:
   recordsale:
     description: Enregistre une vente pour tester le top des items.
     usage: /recordsale <amount>
+    permission: shshopguitop.recordsale
+
+permissions:
+  shshopguitop.recordsale:
+    description: Enregistre une vente à la main (test). Sans cela, n'importe quel joueur gonflait le classement.
+    default: op
