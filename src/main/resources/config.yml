@@ -1,4 +1,37 @@
+# SHShopGuiTop : classement des articles les plus vendus au shop ShopGUI+, en placeholders PlaceholderAPI.
+# Chaque vente réelle (ShopGUI+ SELL et SELL_ALL, hors transactions annulées) s'ajoute au total de son article.
+#
+# Placeholders :
+#   %shshopguitop_top1% ... %shshopguitop_top10%    ligne du classement, mise en forme par placeholder.format.
+#
+# Commande :
+#   /recordsale <quantité>                           Enregistre une vente de l'item en main (test).
+#   /recordsale <article> <quantité> <revenu>        Depuis la console.
+#
+# Permission :
+#   shshopguitop.recordsale                          /recordsale (op par défaut).
+#
+# Les ventes sont gardées dans sales.yml, écrit toutes les 5 minutes et à l'arrêt.
+
 placeholder:
+  # Jetons : {index} rang, {item} nom de l'article, {sold} exemplaires vendus, {revenue} revenu total
   format: "&e{index} &7• &e{item}&7, &e{sold} &7vendus (&e{revenue} SHC&7)"
 display:
   useRealName: true
+
+# Avec SHNetwork, les ventes de tous les serveurs s'additionnent dans la base commune (table shshopguitop_sales,
+# ajout atomique sold = sold + ?) et sales.yml n'est plus écrit. Si la base est encore vide au démarrage, les ventes
+# de sales.yml y sont reprises une fois. Sans SHNetwork, ou à false, sales.yml reste la référence de ce serveur.
+# Demande un redémarrage.
+reseau:
+  actif: true
+  # Délai entre deux écritures des ventes en base, en secondes
+  ecriture-secondes: 10
+  # Délai entre deux relectures du classement en base, en secondes : les placeholders affichent cette copie
+  rafraichissement-secondes: 60
+  base-de-donnees:
+    url: "jdbc:mariadb://127.0.0.1:3306/bo_net"
+    utilisateur: CHANGE_ME
+    mot-de-passe: CHANGE_ME
+    # Délai maximal de connexion et de réponse de la base, en millisecondes
+    delai-ms: 3000

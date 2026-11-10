@@ -1,6 +1,9 @@
 package org.Cry_Legende.sHShopGuiTop;
 
 import me.clip.placeholderapi.expansion.PlaceholderExpansion;
+import org.Cry_Legende.sHShopGuiTop.network.NetworkSales;
+import org.Cry_Legende.sHShopGuiTop.network.SalesDatabase;
+import org.Cry_Legende.sHShopGuiTop.network.SalesStore;
 import net.brcdev.shopgui.ShopGuiPlusApi;
 import net.brcdev.shopgui.event.ShopPreTransactionEvent;
 import net.brcdev.shopgui.shop.ShopManager;
@@ -37,6 +40,8 @@ public class SHShopGuiTop extends JavaPlugin {
     // Ventes enregistrées depuis la dernière écriture de sales.yml
     private volatile boolean dirty;
     private final Object fileLock = new Object();
+    // Classement commun aux serveurs du réseau ; null sans SHNetwork, sales.yml fait alors foi
+    private NetworkSales network;
 
     /**
      * Retourne le nom localisé de l'item en français en se basant sur la traduction intégrée de Minecraft.
@@ -97,21 +102,59 @@ public class SHShopGuiTop extends JavaPlugin {
         getCommand("recordsale").setExecutor(new RecordSaleCommand());
         getServer().getPluginManager().registerEvents(new ShopSaleListener(), this);
 
+        enableNetwork();
+
         // Sauvegarde périodique hors du thread principal : un crash ne fait plus perdre toutes les ventes depuis le démarrage
-        getServer().getScheduler().runTaskTimerAsynchronously(this, () -> {
-            if (dirty) {
-                dirty = false;
-                saveSales();
-            }
-        }, 6000L, 6000L);
+        if (network == null) {
+            getServer().getScheduler().runTaskTimerAsynchronously(this, () -> {
+                if (dirty) {
+                    dirty = false;
+                    saveSales();
+                }
+            }, 6000L, 6000L);
+        }
 
         getLogger().info("SHShopGuiTop activé !");
     }
 
     @Override
     public void onDisable() {
-        if (saveSales()) {
+        if (network != null) {
+            network.disable();
+            getLogger().info("Les ventes en attente ont été écrites en base.");
+        } else if (saveSales()) {
             getLogger().info("Les données de ventes ont été sauvegardées avec succès.");
+        }
+    }
+
+    /**
+     * Passe en mode réseau si SHNetwork est installé et 'reseau.actif' est vrai : les ventes de tous les serveurs
+     * s'additionnent en base. Sans SHNetwork, rien de ce qui touche à la base n'est chargé et sales.yml reste la
+     * référence, comme avant.
+     */
+    private void enableNetwork() {
+        if (!getConfig().getBoolean("reseau.actif", true)) return;
+        if (!Bukkit.getPluginManager().isPluginEnabled("SHNetwork")) return;
+        String url = getConfig().getString("reseau.base-de-donnees.url", "");
+        String password = getConfig().getString("reseau.base-de-donnees.mot-de-passe", "");
+        if (url.isBlank() || password.equals("CHANGE_ME")) {
+            getLogger().warning("SHNetwork détecté mais reseau.base-de-donnees n'est pas renseignée : classement local à ce serveur.");
+            return;
+        }
+        try {
+            SalesStore store = new SalesDatabase(url,
+                getConfig().getString("reseau.base-de-donnees.utilisateur", ""), password,
+                Math.max(250, getConfig().getInt("reseau.base-de-donnees.delai-ms", 3000)));
+            NetworkSales sales = new NetworkSales(this, store);
+            sales.enable(Math.max(1, getConfig().getInt("reseau.ecriture-secondes", 10)),
+                Math.max(1, getConfig().getInt("reseau.rafraichissement-secondes", 60)),
+                SalesManager.getInstance().allRows());
+            SalesManager.getInstance().useNetwork(sales);
+            network = sales;
+            getLogger().info("SHNetwork détecté : ventes additionnées en base pour tous les serveurs.");
+        } catch (RuntimeException | LinkageError e) {
+            network = null;
+            getLogger().log(java.util.logging.Level.SEVERE, "SHNetwork présent mais inutilisable, classement local à ce serveur : " + e);
         }
     }
 
@@ -218,6 +261,21 @@ public class SHShopGuiTop extends JavaPlugin {
         private final Map<String, SalesStatsEntry> salesData = new HashMap<>();
         // Copie triée du top 10, recalculée seulement après une vente (les placeholders sont demandés très souvent)
         private List<SalesStatsEntry> topCache;
+        // Classement commun aux serveurs : s'il est là, les ventes et le top passent par lui
+        private volatile NetworkSales network;
+
+        void useNetwork(NetworkSales network) {
+            this.network = network;
+        }
+
+        /** Toutes les ventes connues de ce serveur, pour les reprendre dans la base commune. */
+        synchronized List<SalesStore.Row> allRows() {
+            List<SalesStore.Row> rows = new ArrayList<>(salesData.size());
+            for (SalesStatsEntry e : salesData.values()) {
+                rows.add(new SalesStore.Row(e.getInternalName(), e.getMinecraftId(), e.getSold(), e.getRevenue()));
+            }
+            return rows;
+        }
 
         public static SalesManager getInstance() {
             if (instance == null) {
@@ -235,6 +293,10 @@ public class SHShopGuiTop extends JavaPlugin {
          * @param revenue      revenu généré par la vente
          */
         public synchronized void recordSale(String internalName, String minecraftId, int amount, double revenue) {
+            if (network != null) {
+                network.record(internalName, minecraftId, amount, revenue);
+                return;
+            }
             SalesStatsEntry entry = salesData.get(internalName);
             if (entry == null) {
                 entry = new SalesStatsEntry(internalName, minecraftId, 0, 0.0);
@@ -250,6 +312,9 @@ public class SHShopGuiTop extends JavaPlugin {
          * Renvoie la liste triée des ventes (du plus vendu au moins vendu), limitée aux 10 premiers éléments.
          */
         public synchronized List<SalesStatsEntry> getTopSales() {
+            if (network != null) {
+                return network.top();
+            }
             if (topCache == null) {
                 List<SalesStatsEntry> list = new ArrayList<>(salesData.size());
                 for (SalesStatsEntry e : salesData.values()) {

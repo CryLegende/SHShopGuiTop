@@ -18,9 +18,12 @@ Classement des items les plus vendus au shop ShopGUI+, en placeholders.
 
 Utilisé sur : **Opale**.
 
+Avec **SHNetwork** (facultatif), les ventes de tous les serveurs s'additionnent dans la base commune (table `shshopguitop_sales`, ajout atomique `sold = sold + ?`, écriture par lots) et le classement affiché est relu en base toutes les 60 secondes. Au premier démarrage, si la base est vide, les ventes de `sales.yml` y sont reprises. Sans SHNetwork, ou avec `reseau.actif: false`, `sales.yml` reste la référence de ce serveur.
+
 ## Dépendances
 
 - Obligatoires : `PlaceholderAPI`, `ShopGUIPlus`
+- Facultatives : `SHNetwork`
 
 ## Commandes
 
@@ -36,6 +39,8 @@ Fichiers par défaut repris du serveur (secrets remplacés par `CHANGE_ME`). Cli
 plugins/SHShopGuiTop/
 └── <a href="src/main/resources/config.yml">config.yml</a>
 </pre>
+
+La section `reseau` (actif par défaut, base de données, délais d'écriture et de relecture) ne sert qu'avec SHNetwork et demande un redémarrage.
 
 ## Compilation
 
