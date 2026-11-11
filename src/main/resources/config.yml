@@ -4,12 +4,21 @@
 # Placeholders :
 #   %shshopguitop_top1% ... %shshopguitop_top10%    ligne du classement, mise en forme par placeholder.format.
 #
-# Commande :
-#   /recordsale <quantité>                           Enregistre une vente de l'item en main (test).
-#   /recordsale <article> <quantité> <revenu>        Depuis la console.
+# Commandes :
+#   /shshopguitop record <quantité>                      Enregistre une vente de l'objet de shop en main (test).
+#   /shshopguitop record <article> <quantité> <revenu>   Idem pour un article nommé, depuis la console.
+#   /shshopguitop top                                    Affiche le classement avec les quantités et revenus exacts.
+#   /shshopguitop reload                                 Recharge config.yml et messages.yml, sans toucher aux ventes
+#                                                        (la section reseau demande un redémarrage).
+#   /recordsale ...                                      Ancienne commande, identique à record.
 #
-# Permission :
-#   shshopguitop.recordsale                          /recordsale (op par défaut).
+# Permissions (op par défaut) :
+#   shshopguitop.admin           Toutes les sous-commandes de /shshopguitop.
+#   shshopguitop.admin.record    record et /recordsale.
+#   shshopguitop.admin.top       top.
+#   shshopguitop.admin.reload    reload.
+#
+# Les textes sont dans messages.yml.
 #
 # Les ventes sont gardées dans sales.yml, écrit toutes les 5 minutes et à l'arrêt.
 
@@ -22,7 +31,7 @@ display:
 # Avec SHNetwork, les ventes de tous les serveurs s'additionnent dans la base commune (table shshopguitop_sales,
 # ajout atomique sold = sold + ?) et sales.yml n'est plus écrit. Si la base est encore vide au démarrage, les ventes
 # de sales.yml y sont reprises une fois. Sans SHNetwork, ou à false, sales.yml reste la référence de ce serveur.
-# Demande un redémarrage.
+# Toute cette section se lit au démarrage : la modifier demande un redémarrage.
 reseau:
   actif: true
   # Délai entre deux écritures des ventes en base, en secondes

@@ -27,9 +27,20 @@ Avec **SHNetwork** (facultatif), les ventes de tous les serveurs s'additionnent 
 
 ## Commandes
 
-| Commande | Alias | Description | Permission |
-|---|---|---|---|
-| `/recordsale` | — | Enregistre une vente pour tester le top des items. | — |
+| Commande | Description | Permission |
+|---|---|---|
+| `/shshopguitop record <quantité>` | Enregistre une vente de l'objet de shop en main (test). | `shshopguitop.admin.record` |
+| `/shshopguitop record <article> <quantité> <revenu>` | Idem pour un article nommé, depuis la console. | `shshopguitop.admin.record` |
+| `/shshopguitop top` | Affiche le classement avec les quantités et revenus exacts. | `shshopguitop.admin.top` |
+| `/shshopguitop reload` | Recharge `config.yml` et `messages.yml` sans toucher aux ventes ; si un fichier est illisible, l'ancienne configuration reste active. La section `reseau` demande un redémarrage. | `shshopguitop.admin.reload` |
+| `/recordsale` | Ancienne commande, identique à `/shshopguitop record`. | `shshopguitop.admin.record` |
+
+## Permissions
+
+| Permission | Description | Par défaut |
+|---|---|---|
+| `shshopguitop.admin` | Toutes les sous-commandes de `/shshopguitop`. | `op` |
+| `shshopguitop.admin.record` `.top` `.reload` | Une sous-commande. | `op` |
 
 ## Configuration
 
@@ -37,7 +48,8 @@ Fichiers par défaut repris du serveur (secrets remplacés par `CHANGE_ME`). Cli
 
 <pre>
 plugins/SHShopGuiTop/
-└── <a href="src/main/resources/config.yml">config.yml</a>
+├── <a href="src/main/resources/config.yml">config.yml</a>
+└── <a href="src/main/resources/messages.yml">messages.yml</a>
 </pre>
 
 La section `reseau` (actif par défaut, base de données, délais d'écriture et de relecture) ne sert qu'avec SHNetwork et demande un redémarrage.

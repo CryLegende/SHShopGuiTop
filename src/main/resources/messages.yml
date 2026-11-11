@@ -1,0 +1,33 @@
+# Messages de SHShopGuiTop, codes couleur &. Un message vide ("") n'est pas envoyé.
+#
+# Placeholders :
+#   {commands}   sous-commandes de /shshopguitop que l'expéditeur peut utiliser (usage)
+#   {file}       fichier illisible (reload-failed)
+#   {error}      erreur de lecture du fichier (reload-failed)
+#   {amount} {item} {revenue}   vente enregistrée (record-done-hand)
+#   {item}       article enregistré (record-done-item)
+#   {count}      nombre d'articles affichés (top-header)
+#   {rank} {item} {id} {sold} {revenue}   ligne du classement (top-line) : nom traduit, nom interne dans ShopGUI+,
+#                exemplaires vendus, revenu total exact
+
+no-permission: "&7&l« &f&lSH &8&l» &fCommande inconnue, essayez autre chose."
+usage: "&7&l« &e&lSH &8&l» &7Utilisation : &e/shshopguitop <{commands}>&7."
+
+# /shshopguitop reload
+reloaded: "&7&l« &a&lSH &8&l» &7Configuration &arechargée&7. La section &ereseau &7de config.yml demande un redémarrage."
+reload-failed: "&7&l« &c&lSH &8&l» &7Rechargement &cimpossible&7, &c{file} &7illisible : &c{error}&7. L'ancienne configuration reste active."
+
+# /shshopguitop record
+record-usage: "&7&l« &e&lSH &8&l» &7Utilisation : &e/shshopguitop record <quantité> &7(objet de shop en main) ou &e/shshopguitop record <article> <quantité> <revenu>&7."
+record-hand-empty: "&7&l« &c&lSH &8&l» &7Vous devez tenir un &carticle de shop &7en main."
+record-not-shop: "&7&l« &c&lSH &8&l» &7L'objet en main &cne fait pas partie d'un shop&7."
+record-amount-invalid: "&7&l« &c&lSH &8&l» &7La quantité doit être un &cnombre&7."
+record-number-invalid: "&7&l« &c&lSH &8&l» &7Quantité ou revenu &cinvalide&7."
+record-price-error: "&7&l« &c&lSH &8&l» &7Impossible de récupérer le &cprix de vente&7."
+record-done-hand: "&7&l« &a&lSH &8&l» &7Vente enregistrée : &a{amount} &7x &a{item} &7(revenu : &a{revenue}&7)."
+record-done-item: "&7&l« &a&lSH &8&l» &7Vente enregistrée pour &a{item}&7."
+
+# /shshopguitop top
+top-header: "&7&l« &e&lSH &8&l» &7Classement des ventes : &e{count} &7articles."
+top-line: "&8• &e{rank}. &f{item} &8(&7{id}&8) &7: &e{sold} &7vendus, &e{revenue} &7SHC"
+top-empty: "&7&l« &e&lSH &8&l» &7Aucune vente enregistrée pour le moment."

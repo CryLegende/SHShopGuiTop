@@ -13,12 +13,28 @@ libraries:
   - org.mariadb.jdbc:mariadb-java-client:3.4.1
 
 commands:
+  shshopguitop:
+    description: Administration de SHShopGuiTop.
+    usage: /<command> <record|top|reload>
   recordsale:
-    description: Enregistre une vente pour tester le top des items.
-    usage: /recordsale <amount>
-    permission: shshopguitop.recordsale
+    description: Ancienne commande, identique à /shshopguitop record.
+    usage: /<command> <quantité> | /<command> <article> <quantité> <revenu>
+    permission: shshopguitop.admin.record
 
 permissions:
-  shshopguitop.recordsale:
-    description: Enregistre une vente à la main (test). Sans cela, n'importe quel joueur gonflait le classement.
+  shshopguitop.admin:
+    description: Toutes les sous-commandes de /shshopguitop.
+    default: op
+    children:
+      shshopguitop.admin.reload: true
+      shshopguitop.admin.record: true
+      shshopguitop.admin.top: true
+  shshopguitop.admin.reload:
+    description: /shshopguitop reload, recharge config.yml et messages.yml.
+    default: op
+  shshopguitop.admin.record:
+    description: /shshopguitop record, enregistre une vente à la main (test). Sans cela, n'importe quel joueur gonflait le classement.
+    default: op
+  shshopguitop.admin.top:
+    description: /shshopguitop top, affiche le classement avec les valeurs exactes.
     default: op

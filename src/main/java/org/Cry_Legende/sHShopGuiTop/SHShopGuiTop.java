@@ -4,7 +4,6 @@ import me.clip.placeholderapi.expansion.PlaceholderExpansion;
 import org.Cry_Legende.sHShopGuiTop.network.NetworkSales;
 import org.Cry_Legende.sHShopGuiTop.network.SalesDatabase;
 import org.Cry_Legende.sHShopGuiTop.network.SalesStore;
-import net.brcdev.shopgui.ShopGuiPlusApi;
 import net.brcdev.shopgui.event.ShopPreTransactionEvent;
 import net.brcdev.shopgui.shop.ShopManager;
 import net.brcdev.shopgui.shop.item.ShopItem;
@@ -12,9 +11,8 @@ import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.Material;
 import org.bukkit.configuration.ConfigurationSection;
+import org.bukkit.configuration.InvalidConfigurationException;
 import org.bukkit.configuration.file.YamlConfiguration;
-import org.bukkit.command.Command;
-import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
@@ -42,6 +40,7 @@ public class SHShopGuiTop extends JavaPlugin {
     private final Object fileLock = new Object();
     // Classement commun aux serveurs du réseau ; null sans SHNetwork, sales.yml fait alors foi
     private NetworkSales network;
+    private volatile Messages messages;
 
     /**
      * Retourne le nom localisé de l'item en français en se basant sur la traduction intégrée de Minecraft.
@@ -99,7 +98,19 @@ public class SHShopGuiTop extends JavaPlugin {
         new SHShopGuiTopExpansion(this).register();
         getLogger().info("Extension PlaceholderAPI enregistrée avec succès.");
 
-        getCommand("recordsale").setExecutor(new RecordSaleCommand());
+        // Crée messages.yml au premier démarrage
+        Messages.prepare(this);
+        try {
+            messages = Messages.load(this);
+        } catch (IOException | InvalidConfigurationException e) {
+            getLogger().warning("messages.yml illisible, textes du jar utilisés : " + e.getMessage());
+            messages = Messages.defaults(this);
+        }
+        AdminCommand admin = new AdminCommand(this);
+        getCommand("shshopguitop").setExecutor(admin);
+        getCommand("shshopguitop").setTabCompleter(admin);
+        // Ancienne commande, même effet que /shshopguitop record
+        getCommand("recordsale").setExecutor(admin);
         getServer().getPluginManager().registerEvents(new ShopSaleListener(), this);
 
         enableNetwork();
@@ -178,6 +189,35 @@ public class SHShopGuiTop extends JavaPlugin {
 
     void markDirty() {
         dirty = true;
+    }
+
+    /** Envoie le message de messages.yml ; chaque paire de {@code pairs} remplace un {nom} par sa valeur. */
+    void send(CommandSender sender, String key, String... pairs) {
+        String text = messages.get(key, pairs);
+        if (text != null) {
+            sender.sendMessage(text);
+        }
+    }
+
+    /**
+     * Relit config.yml et messages.yml. Les deux sont lus à part et ne remplacent l'état en cours que s'ils sont
+     * valides ; sinon l'ancienne configuration reste active et le message donne le fichier et l'erreur. Les ventes
+     * (sales.yml ou base) ne sont pas touchées ; la section reseau ne se recharge pas à chaud.
+     */
+    void reload(CommandSender sender) {
+        String file = "config.yml";
+        try {
+            new YamlConfiguration().load(new File(getDataFolder(), file));
+            file = "messages.yml";
+            Messages loaded = Messages.load(this);
+            reloadConfig();
+            messages = loaded;
+            send(sender, "reloaded");
+        } catch (IOException | InvalidConfigurationException e) {
+            String error = e.getMessage() == null ? e.toString() : e.getMessage().lines().findFirst().orElse("");
+            getLogger().warning(file + " illisible, l'ancienne configuration reste active : " + error);
+            send(sender, "reload-failed", "file", file, "error", error);
+        }
     }
 
     public static SHShopGuiTop getInstance() {
@@ -395,82 +435,6 @@ public class SHShopGuiTop extends JavaPlugin {
         public void addSale(int amount, double rev) {
             this.sold += amount;
             this.revenue += rev;
-        }
-    }
-
-    // --- Commande de test pour enregistrer une vente manuellement ---
-    public static class RecordSaleCommand implements CommandExecutor {
-
-        /**
-         * Pour un joueur : /recordsale <amount>
-         * Le plugin récupère l’item tenu en main, vérifie via ShopGUI+ s'il fait partie d'un shop,
-         * récupère le prix de vente et enregistre la vente.
-         * <p>
-         * Pour la console : /recordsale <itemName> <amount> <revenue>
-         */
-        @Override
-        public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
-            if (sender instanceof Player) {
-                Player player = (Player) sender;
-                ItemStack item = player.getInventory().getItemInMainHand();
-                if (item == null || item.getType() == Material.AIR) {
-                    player.sendMessage(ChatColor.RED + "Vous devez tenir un item de shop en main.");
-                    return true;
-                }
-                ShopItem shopItem = ShopGuiPlusApi.getItemStackShopItem(player, item);
-                if (shopItem == null) {
-                    player.sendMessage(ChatColor.RED + "L'item en main ne fait pas partie d'un shop.");
-                    return true;
-                }
-                if (args.length != 1) {
-                    player.sendMessage(ChatColor.RED + "Usage: /recordsale <amount>");
-                    return true;
-                }
-                int amount;
-                try {
-                    amount = Integer.parseInt(args[0]);
-                } catch (NumberFormatException e) {
-                    player.sendMessage(ChatColor.RED + "Le montant doit être un nombre.");
-                    return true;
-                }
-                double price = ShopGuiPlusApi.getItemStackPriceSell(player, item);
-                if (price < 0) {
-                    player.sendMessage(ChatColor.RED + "Impossible de récupérer le prix de vente.");
-                    return true;
-                }
-                double revenue = price * amount;
-                String internalName = getInternalName(shopItem);
-                String minecraftId = "minecraft:" + item.getType().toString().toLowerCase(Locale.ROOT);
-                SalesManager.getInstance().recordSale(internalName, minecraftId, amount, revenue);
-                player.sendMessage(ChatColor.GREEN + "Vente enregistrée : " + amount + " " + internalName + " (Revenu: " + revenue + ")");
-                return true;
-            } else {
-                if (args.length != 3) {
-                    sender.sendMessage("Usage: /recordsale <itemName> <amount> <revenue>");
-                    return true;
-                }
-                String key = args[0].toLowerCase(Locale.ROOT);
-                int amount;
-                double revenue;
-                try {
-                    amount = Integer.parseInt(args[1]);
-                    revenue = Double.parseDouble(args[2]);
-                } catch (NumberFormatException e) {
-                    sender.sendMessage("Format numérique invalide.");
-                    return true;
-                }
-                SalesManager.getInstance().recordSale(key, key, amount, revenue);
-                sender.sendMessage("Vente enregistrée pour " + key);
-                return true;
-            }
-        }
-
-        private String getInternalName(ShopItem shopItem) {
-            String id = shopItem.getId();
-            if (id != null && !id.trim().isEmpty()) {
-                return id.toLowerCase(Locale.ROOT);
-            }
-            return shopItem.toString().toLowerCase(Locale.ROOT);
         }
     }
 
