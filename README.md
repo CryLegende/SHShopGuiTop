@@ -44,7 +44,7 @@ Avec **SHNetwork** (facultatif), les ventes de tous les serveurs s'additionnent 
 
 ## Configuration
 
-Fichiers par défaut repris du serveur (secrets remplacés par `CHANGE_ME`). Cliquez sur un fichier pour l'ouvrir :
+Fichiers par défaut, avec des valeurs d'exemple. Cliquez sur un fichier pour l'ouvrir :
 
 <pre>
 plugins/SHShopGuiTop/
