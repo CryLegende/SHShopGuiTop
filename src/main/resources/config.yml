@@ -39,7 +39,7 @@ reseau:
   # Délai entre deux relectures du classement en base, en secondes : les placeholders affichent cette copie
   rafraichissement-secondes: 60
   base-de-donnees:
-    url: "jdbc:mariadb://127.0.0.1:3306/bo_net"
+    url: "jdbc:mariadb://127.0.0.1:3306/minecraft"
     utilisateur: CHANGE_ME
     mot-de-passe: CHANGE_ME
     # Délai maximal de connexion et de réponse de la base, en millisecondes
