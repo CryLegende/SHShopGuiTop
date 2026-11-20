@@ -96,7 +96,6 @@ public class SHShopGuiTop extends JavaPlugin {
         SalesManager.getInstance().loadFromConfiguration(salesConfig);
 
         new SHShopGuiTopExpansion(this).register();
-        getLogger().info("Extension PlaceholderAPI enregistrée avec succès.");
 
         // Crée messages.yml au premier démarrage
         Messages.prepare(this);
@@ -125,7 +124,6 @@ public class SHShopGuiTop extends JavaPlugin {
             }, 6000L, 6000L);
         }
 
-        getLogger().info("SHShopGuiTop activé !");
     }
 
     @Override
@@ -134,7 +132,6 @@ public class SHShopGuiTop extends JavaPlugin {
             network.disable();
             getLogger().info("Les ventes en attente ont été écrites en base.");
         } else if (saveSales()) {
-            getLogger().info("Les données de ventes ont été sauvegardées avec succès.");
         }
     }
 
